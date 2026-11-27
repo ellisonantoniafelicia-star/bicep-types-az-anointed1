@@ -75,3 +75,48 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+https://cla.opensource.microsoft.comhttps://opensource.microsoft.com/codeofconduct/https://opensource.microsoft.com/codeofconduct/faq/opencode@microsoft.comezkl --help
+ezkl <command> --help  }
+
+  if (event.type === 'payout.failed' || event.type === 'payout.canceled') {
+    // Works from released OR provisional. Never touches a settled batch.
+    const b = await db.query(
+      `update batches set status='open', payout_id=null, window_end=null
+       where id=$1 and status in ('released','provisional')
+       returning currency, total`,
+      [batchId]
+    );
+    if (b.rowCount === 1) {
+      await db.query(
+        `insert into ledger (wallet, batch_id, type, amount) values ($1,$2,'reversal',$3)`,
+        [b.rows[0].currency, batchId, b.rows[0].total]
+      );
+    } else {
+      console.error(`Payout ${p.id} failed but batch ${batchId} is already settled. Manual review needed.`);
+    }
+  }
+}
+
+// Run daily (cron): close the failure window on provisional batches.
+async function settleProvisionalBatches() {
+  const r = await pool.query(
+    `update batches set status='settled' where status='provisional' and window_end <= current_date returning id`
+  );
+  return r.rows.map((x) => x.id);
+}
+
+function addBusinessDays(from, n) {
+  const d = new Date(from);
+  while (n > 0) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    if (d.getUTCDay() % 6 !== 0) n--; // skips Sat and Sun; add a holiday list for exact banking days
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+app.listen(process.env.PORT || 3000);
+module.exports = { settleProvisionalBatches };
+event.typex.idp.idmodule.exportsSummarize it: a short version covering payout schedules, settlement timing, and what to expect for your first payout.
+Answer a specific question: for example, how long a payout will take, what bank details a US account needs, or why a payout might fail.
+Set something up: such as walking through adding a bank account, choosing a payout schedule, or testing payouts with the test account numbers.
+Build something: like a checklist, a code snippet using the payouts API, or a comparison of manual vs. automatic payouts.Ready for step 2, the webhook handler (Node, with signature verification, idempotent event handling and the paid, failed and negative-payout cases)? Say "next" and I'll build it.
